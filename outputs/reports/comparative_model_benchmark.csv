@@ -1,0 +1,8 @@
+,Accuracy,Precision,Recall,F1_Score,ROC_AUC
+Decision Tree,0.8403,0.8504,0.8403,0.8408,
+Support Vector Machine (SVM),0.9087,0.9119,0.9087,0.909,
+Random Forest,0.8973,0.8989,0.8973,0.8975,
+Gradient Boosting (GBM),0.8973,0.8996,0.8973,0.8974,
+Baseline SoilCNN (2025 Paper),0.7871,0.8021,0.7871,0.7784,0.0
+Baseline MobileNetV2 (Base Paper),0.7529,0.7602,0.7529,0.7463,0.0
+PROPOSED: UAV-SoilHealthNet (Novel),0.5171,0.4854,0.5171,0.4668,0.9343

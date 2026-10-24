@@ -1,0 +1,33 @@
+======================================================================
+🌾 ICAR-COMPLIANT PAN-INDIA PRECISION SOIL HEALTH PRESCRIPTION CARD
+   UAV SwaYaan Precision Agriculture Decision Support Engine
+======================================================================
+Field Location      : Deccan Agricultural Basin (Maharashtra / Central India)
+Classified Soil     : Black Soil
+Agro-Climatic Belt  : Deccan Lava Plateau (Maharashtra, Madhya Pradesh, Gujarat, Northern Karnataka, Telangana, Andhra Pradesh).
+Health Status       : Healthy Soil
+Soil Health Index   : 84.2 / 100
+----------------------------------------------------------------------
+🌱 RECOMMENDED CROPS FOR OPTIMAL YIELD:
+   • Cotton
+   • Soybean
+   • Gram / Chickpea
+   • Pigeon Pea (Arhar)
+   • Sorghum (Jowar)
+   • Sunflower
+----------------------------------------------------------------------
+💧 IRRIGATION SCHEDULING & WATER CONSERVATION:
+   Low frequency, controlled volume irrigation. Drip irrigation preferred to prevent waterlogging and root asphyxiation.
+----------------------------------------------------------------------
+⚠️ DIAGNOSTIC STATUS & TARGETED INTERVENTIONS:
+   Verdict: Soil is in optimal condition with balanced texture, visible biological activity, and high structure stability.
+   Action Steps:
+   [!] Maintain current crop rotation (Cereal-Legume rotation).
+   [!] Continue standard organic amendments (compost/FYM).
+   [!] Optimal routine irrigation scheduling.
+----------------------------------------------------------------------
+🌿 SUSTAINABLE SOIL REGENERATION PRACTICES:
+   ✓ Ensure proper surface field drainage (Broad Bed and Furrow - BBF system) during heavy monsoon rains.
+   ✓ Avoid heavy machinery operations when soil is wet to prevent severe compaction.
+   ✓ Incorporate organic compost and gypsum if surface cracking indicates sodicity.
+======================================================================
