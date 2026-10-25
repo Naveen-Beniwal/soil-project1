@@ -61,16 +61,25 @@ class SoilGradCAM:
         # Global average pooling of gradients
         pooled_gradients = torch.mean(self.gradients, dim=[0, 2, 3])
 
-        # Weight the channels by corresponding gradients
-        for i in range(self.activations.shape[1]):
-            self.activations[:, i, :, :] *= pooled_gradients[i]
+        # Weight the channels by corresponding gradients (using clone to avoid mutating hook activations)
+        activations = self.activations.clone()
+        for i in range(activations.shape[1]):
+            activations[:, i, :, :] *= pooled_gradients[i]
 
-        heatmap = torch.mean(self.activations, dim=1).squeeze().cpu().numpy()
-        heatmap = np.maximum(heatmap, 0)  # ReLU on CAM
+        heatmap = torch.mean(activations, dim=1).squeeze().cpu().numpy()
 
-        # Normalize between 0 and 1
-        if np.max(heatmap) != 0:
-            heatmap /= np.max(heatmap)
+        # Standard positive activation (ReLU)
+        pos_heatmap = np.maximum(heatmap, 0)
+
+        if np.max(pos_heatmap) > 1e-7:
+            heatmap = pos_heatmap / np.max(pos_heatmap)
+        else:
+            # Fallback for dual-branch models:
+            # When global handcrafted features dominate the positive gradient,
+            # use relative spatial min-max normalization to reveal spatial attention gradients
+            # rather than flattening the entire heatmap into a solid monochrome blackout.
+            denom = np.max(heatmap) - np.min(heatmap)
+            heatmap = (heatmap - np.min(heatmap)) / (denom + 1e-8) if denom > 1e-7 else np.zeros_like(heatmap)
 
         return heatmap
 
@@ -78,11 +87,13 @@ class SoilGradCAM:
     def overlay_heatmap(
         image_rgb: np.ndarray,
         heatmap: np.ndarray,
-        alpha: float = 0.5,
+        alpha: float = 0.6,
         colormap: int = cv2.COLORMAP_JET
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Overlays Grad-CAM heatmap onto original RGB image.
+        Overlays Grad-CAM heatmap onto original RGB image using adaptive attention masking.
+        Preserves natural soil colors in low-attention zones (eliminating purple haze),
+        while dynamically highlighting true attention hotspots in glowing cyan/yellow/red.
         Returns: (blended_rgb, colored_heatmap_rgb)
         """
         h, w = image_rgb.shape[:2]
@@ -92,5 +103,10 @@ class SoilGradCAM:
         colored_cam = cv2.applyColorMap(heatmap_uint8, colormap)
         colored_cam_rgb = cv2.cvtColor(colored_cam, cv2.COLOR_BGR2RGB)
 
-        blended = cv2.addWeighted(image_rgb, 1.0 - alpha, colored_cam_rgb, alpha, 0)
+        # Adaptive alpha mask: low attention pixels (<0.2) preserve natural soil colors with 0 purple tint
+        # High attention hotspots smoothly blend the vibrant thermal colormap
+        alpha_mask = np.clip((heatmap_resized - 0.2) / 0.8, 0.0, 1.0)
+        alpha_3d = np.repeat(alpha_mask[:, :, np.newaxis], 3, axis=2) * alpha
+
+        blended = np.uint8(np.clip(image_rgb.astype(np.float32) * (1.0 - alpha_3d) + colored_cam_rgb.astype(np.float32) * alpha_3d, 0, 255))
         return blended, colored_cam_rgb

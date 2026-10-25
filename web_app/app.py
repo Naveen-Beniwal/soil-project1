@@ -24,6 +24,7 @@ from src.preprocessing.feature_extractor import SoilFeatureExtractor
 from src.advisory.farmer_advisory import FarmerAdvisoryEngine
 from src.models.advanced_model import UAVSoilHealthNet
 from src.models.explainability import SoilGradCAM
+from src.mapping.digital_soil_mapper import DigitalSoilMapper
 import torch
 
 # Streamlit Page Config
@@ -51,7 +52,8 @@ def load_system():
     preprocessor = UAVImagePreprocessor()
     feature_extractor = SoilFeatureExtractor()
     advisory_engine = FarmerAdvisoryEngine()
-    
+    digital_soil_mapper = DigitalSoilMapper(output_dir=MAPS_DIR)
+
     device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
     model = UAVSoilHealthNet(
         num_soil_types=len(SOIL_TYPES),
@@ -65,10 +67,10 @@ def load_system():
         model.load_state_dict(torch.load(str(model_ckpt), map_location=device))
     model.eval()
 
-    return preprocessor, feature_extractor, advisory_engine, model, device
+    return preprocessor, feature_extractor, advisory_engine, digital_soil_mapper, model, device
 
 
-preprocessor, feature_extractor, advisory_engine, model, device = load_system()
+preprocessor, feature_extractor, advisory_engine, digital_soil_mapper, model, device = load_system()
 
 # Sidebar
 st.sidebar.image("https://upload.wikimedia.org/wikipedia/en/thumb/6/6f/NIT_Kurukshetra_Logo.svg/1200px-NIT_Kurukshetra_Logo.svg.png", width=110)
@@ -150,8 +152,8 @@ if nav == "🛸 Live Drone Image Diagnostics":
         pred_type_str = SOIL_TYPES[pred_type_idx]
         pred_health_str = SOIL_HEALTH_STATUSES[pred_health_idx]
 
-        # Grad-CAM Heatmap
-        grad_cam = SoilGradCAM(model=model, target_layer=model.deep_features[-1])
+        # Grad-CAM Heatmap (Hook into high-resolution 14x14 InvertedResidual stage)
+        grad_cam = SoilGradCAM(model=model, target_layer=model.deep_features[12])
         cam_map = grad_cam.generate_cam(t_img, handcrafted_features=t_hc)
         blended_cam, _ = SoilGradCAM.overlay_heatmap(patch_rgb, cam_map)
 
@@ -234,20 +236,208 @@ elif nav == "🗺️ Digital Field GIS Soil Map":
     st.markdown('<p class="main-title">🗺️ Digital Soil Health Spatial Mapping</p>', unsafe_allow_html=True)
     st.markdown('<p class="sub-title">SwaYaan PoC Objective 5: Color-coded GIS Zoning for Precision Agriculture</p>', unsafe_allow_html=True)
 
-    map_img_path = MAPS_DIR / "Indian_Agricultural_Field_Zone_A_soil_health_map.png"
-    html_map_path = MAPS_DIR / "Indian_Agricultural_Field_Zone_A_interactive_map.html"
+    mode = st.radio(
+        "Select Spatial Analysis Mode:",
+        [
+            "🌾 Pre-Stitched Indian Agro-Climatic Field Benchmarks (4 Zones)",
+            "🎲 Generate Random Dynamic Field Mosaic (Live Random Sampling)",
+            "📤 Upload Custom Aerial Drone Orthomosaic"
+        ],
+        horizontal=True
+    )
 
-    if map_img_path.exists():
-        st.image(str(map_img_path), caption="Aerial Orthomosaic Segmentation: Health Zoning & Continuous SHI", use_container_width=True)
-        
-        st.divider()
-        st.subheader("Interactive Web Spatial Grid Dashboard")
-        if html_map_path.exists():
-            with open(html_map_path, "r", encoding="utf-8") as f:
-                html_content = f.read()
-            st.components.v1.html(html_content, height=650, scrolling=True)
+    if mode == "🌾 Pre-Stitched Indian Agro-Climatic Field Benchmarks (4 Zones)":
+        field_selection = st.selectbox(
+            "Select Field Agro-Climatic Parcel:",
+            [
+                "Field 1: Kurukshetra Alluvial Basin (Haryana Wheat/Paddy Parcel)",
+                "Field 2: Deccan Black Soil Parcel (Maharashtra/MP Cotton-Soybean Zone)",
+                "Field 3: Thar Semi-Arid Parcel (Rajasthan Wind-Eroded Sandy Land)",
+                "Field 4: Eastern Red & Laterite Plateau (Stony Acidic Soil Parcel)"
+            ]
+        )
+
+        field_file_map = {
+            "Field 1: Kurukshetra Alluvial Basin (Haryana Wheat/Paddy Parcel)": "Field_1_Kurukshetra_Alluvial_Wheat_Plot",
+            "Field 2: Deccan Black Soil Parcel (Maharashtra/MP Cotton-Soybean Zone)": "Field_2_Deccan_Black_Soil_Cotton_Zone",
+            "Field 3: Thar Semi-Arid Parcel (Rajasthan Wind-Eroded Sandy Land)": "Field_3_Rajasthan_Thar_Arid_Eroded_Parcel",
+            "Field 4: Eastern Red & Laterite Plateau (Stony Acidic Soil Parcel)": "Field_4_Eastern_Red_Laterite_Plateau"
+        }
+
+        fname = field_file_map[field_selection]
+        map_img_path = MAPS_DIR / f"{fname}_soil_health_map.png"
+        html_map_path = MAPS_DIR / f"{fname}_interactive_map.html"
+
+        if map_img_path.exists():
+            st.image(str(map_img_path), caption=f"Aerial Orthomosaic Segmentation: Health Zoning & Continuous SHI ({field_selection})", use_container_width=True)
+            st.divider()
+            st.subheader("Interactive Web Spatial Grid Dashboard")
+            if html_map_path.exists():
+                with open(html_map_path, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+                st.components.v1.html(html_content, height=650, scrolling=True)
+        else:
+            st.warning("Digital soil map not found. Generating...")
+
+    elif mode == "🎲 Generate Random Dynamic Field Mosaic (Live Random Sampling)":
+        st.info("Picks 16 random real field soil patches across our authentic 7-class Indian dataset, stitches an aerial field mosaic with edge blending, tiles it, and executes batch ML inference on the fly.")
+
+        grid_n = st.slider("Select Field Grid Dimension (N x N)", min_value=3, max_value=5, value=4)
+
+        if st.button("🎲 Generate & Map Random Field from Dataset", type="primary"):
+            with st.spinner("Sampling authentic field images and compiling real-time GIS map..."):
+                all_images = list(RAW_DATA_DIR.glob("*/*.*"))
+                import random
+                sampled_files = random.sample(all_images, grid_n * grid_n)
+
+                tile_size = 224
+                mosaic = np.zeros((grid_n * tile_size, grid_n * tile_size, 3), dtype=np.uint8)
+
+                idx = 0
+                for r in range(grid_n):
+                    for c in range(grid_n):
+                        f = sampled_files[idx]
+                        idx += 1
+                        bgr = cv2.imread(str(f))
+                        if bgr is not None:
+                            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                            p = preprocessor.preprocess_patch(rgb)
+                            y1, y2 = r * tile_size, (r + 1) * tile_size
+                            x1, x2 = c * tile_size, (c + 1) * tile_size
+                            mosaic[y1:y2, x1:x2] = p
+
+                mosaic = cv2.GaussianBlur(mosaic, (3, 3), 0)
+
+                # Tile and infer
+                tiles = preprocessor.tile_large_aerial_image(mosaic, tile_size=tile_size, stride=tile_size)
+                grid_preds = []
+                for t in tiles:
+                    p_rgb = t["patch"]
+                    hc = feature_extractor.extract_all_features(p_rgb)
+                    t_img = torch.from_numpy(p_rgb.transpose(2, 0, 1)).float().unsqueeze(0).to(device) / 255.0
+                    t_hc = torch.tensor(hc, dtype=torch.float32).unsqueeze(0).to(device)
+
+                    with torch.no_grad():
+                        outs = model(t_img, t_hc)
+                        t_type = int(torch.argmax(outs["soil_type_logits"], dim=1).item())
+                        t_health = int(torch.argmax(outs["health_status_logits"], dim=1).item())
+                        t_shi = float(outs["soil_health_index"].item())
+
+                    s_type = SOIL_TYPES[t_type]
+                    s_health = SOIL_HEALTH_STATUSES[t_health]
+                    adv = "Optimal tilth; apply routine topdressing." if t_health == 0 else ("Moderate moisture stress; recommend 10-day watering." if t_health == 1 else "Degraded patch; apply gypsum + organic mulch.")
+
+                    grid_preds.append({
+                        "row": t["row"],
+                        "col": t["col"],
+                        "x": t["x"],
+                        "y": t["y"],
+                        "soil_type_idx": t_type,
+                        "soil_type": s_type,
+                        "health_status_idx": t_health,
+                        "health_status": s_health,
+                        "soil_health_index": t_shi,
+                        "quick_advisory": adv
+                    })
+
+                rand_field_name = f"Random_Dynamic_Field_{grid_n}x{grid_n}"
+                res = digital_soil_mapper.generate_field_map(
+                    orthomosaic_rgb=mosaic,
+                    grid_predictions=grid_preds,
+                    field_name=rand_field_name
+                )
+
+                st.success(f"✅ Generated Dynamic {grid_n}x{grid_n} GIS Soil Health Map!")
+
+                # Metrics
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Grid Tiles Analyzed", len(tiles))
+                m2.metric("Healthy Land Zone", f"{res['healthy_percent']}%")
+                m3.metric("Moderate Stress Zone", f"{res['moderate_percent']}%")
+                m4.metric("Degraded Zone", f"{res['degraded_percent']}%")
+
+                st.image(res["map_png_path"], caption="Real-Time Generated GIS Digital Soil Health Map", use_container_width=True)
+
+                st.divider()
+                st.subheader("Live Interactive Field Grid Dashboard")
+                with open(res["html_path"], "r", encoding="utf-8") as f:
+                    live_html = f.read()
+                st.components.v1.html(live_html, height=650, scrolling=True)
+
     else:
-        st.warning("Digital soil map not generated yet. Please run `python run_pipeline.py` to compile the aerial map.")
+        st.info("Upload any large agricultural field image, drone orthomosaic, or high-altitude aerial survey photo. The system will tile it in real-time, evaluate health across every grid cell, and compile the live zoning map.")
+        uploaded_ortho = st.file_uploader("Upload Large Aerial Field Orthomosaic (JPG / PNG)", type=["jpg", "jpeg", "png"])
+
+        if uploaded_ortho is not None:
+            pil_ortho = Image.open(uploaded_ortho).convert("RGB")
+            ortho_np = np.array(pil_ortho)
+
+            st.image(ortho_np, caption=f"Uploaded Aerial Field Imagery ({ortho_np.shape[1]}x{ortho_np.shape[0]} px)", use_container_width=True)
+
+            if st.button("🚀 Run Live Drone Spatial Tiling & Health Mapping", type="primary"):
+                with st.spinner("Executing real-time spatial tiling and batch neural network inference..."):
+                    tiles = preprocessor.tile_large_aerial_image(ortho_np, tile_size=224, stride=224)
+
+                    if not tiles:
+                        tiles = [{
+                            "patch": preprocessor.preprocess_patch(ortho_np),
+                            "raw_patch": ortho_np,
+                            "x": 0, "y": 0, "row": 0, "col": 0, "width": 224, "height": 224
+                        }]
+
+                    grid_preds = []
+                    progress_bar = st.progress(0)
+                    for i, t in enumerate(tiles):
+                        p_rgb = t["patch"]
+                        hc = feature_extractor.extract_all_features(p_rgb)
+                        t_img = torch.from_numpy(p_rgb.transpose(2, 0, 1)).float().unsqueeze(0).to(device) / 255.0
+                        t_hc = torch.tensor(hc, dtype=torch.float32).unsqueeze(0).to(device)
+
+                        with torch.no_grad():
+                            outs = model(t_img, t_hc)
+                            t_type = int(torch.argmax(outs["soil_type_logits"], dim=1).item())
+                            t_health = int(torch.argmax(outs["health_status_logits"], dim=1).item())
+                            t_shi = float(outs["soil_health_index"].item())
+
+                        s_type = SOIL_TYPES[t_type]
+                        s_health = SOIL_HEALTH_STATUSES[t_health]
+                        adv = "Optimal tilth; apply routine topdressing." if t_health == 0 else ("Moderate moisture stress; recommend 10-day watering." if t_health == 1 else "Degraded patch; apply gypsum + organic mulch.")
+
+                        grid_preds.append({
+                            "row": t["row"],
+                            "col": t["col"],
+                            "x": t["x"],
+                            "y": t["y"],
+                            "soil_type_idx": t_type,
+                            "soil_type": s_type,
+                            "health_status_idx": t_health,
+                            "health_status": s_health,
+                            "soil_health_index": t_shi,
+                            "quick_advisory": adv
+                        })
+                        progress_bar.progress((i + 1) / len(tiles))
+
+                    field_results = digital_soil_mapper.generate_field_map(
+                        orthomosaic_rgb=ortho_np,
+                        grid_predictions=grid_preds,
+                        field_name="Live_Uploaded_Drone_Field"
+                    )
+
+                    st.success("✅ Real-Time Spatial Mapping Complete!")
+
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Grid Tiles Analyzed", len(tiles))
+                    m2.metric("Healthy Land Zone", f"{field_results['healthy_percent']}%")
+                    m3.metric("Moderate Stress Zone", f"{field_results['moderate_percent']}%")
+                    m4.metric("Degraded / Eroded Zone", f"{field_results['degraded_percent']}%")
+
+                    st.image(field_results["map_png_path"], caption="Real-Time Generated GIS Digital Soil Health Map", use_container_width=True)
+
+                    st.divider()
+                    st.subheader("Live Interactive Field Grid Dashboard")
+                    with open(field_results["html_path"], "r", encoding="utf-8") as f:
+                        live_html = f.read()
+                    st.components.v1.html(live_html, height=650, scrolling=True)
 
 # -------------------------------------------------------------------------------------------------
 # TAB 3: Research Benchmark & Novelty

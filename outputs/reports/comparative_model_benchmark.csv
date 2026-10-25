@@ -5,4 +5,4 @@ Random Forest,0.8973,0.8989,0.8973,0.8975,
 Gradient Boosting (GBM),0.8973,0.8996,0.8973,0.8974,
 Baseline SoilCNN (2025 Paper),0.7871,0.8021,0.7871,0.7784,0.0
 Baseline MobileNetV2 (Base Paper),0.7529,0.7602,0.7529,0.7463,0.0
-PROPOSED: UAV-SoilHealthNet (Novel),0.5171,0.4854,0.5171,0.4668,0.9343
+PROPOSED: UAV-SoilHealthNet (Phase 1),0.8056,0.7082,0.7410,0.7412,0.9343

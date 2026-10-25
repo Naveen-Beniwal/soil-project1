@@ -71,11 +71,32 @@ class UAVImagePreprocessor:
             "LAB": lab
         }
 
-    def preprocess_patch(self, image_rgb: np.ndarray, apply_clahe: bool = True) -> np.ndarray:
+    def remove_vegetation_debris(self, image_rgb: np.ndarray) -> np.ndarray:
+        """
+        Detects stray green leaves, grass, and weed debris using HSV green-band masking,
+        and cleanly inpaints them with surrounding soil texture.
+        Fulfills SwaYaan PoC Objective 2: Bare Soil Isolation.
+        """
+        hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
+        lower_green = np.array([25, 35, 35])
+        upper_green = np.array([85, 255, 255])
+        green_mask = cv2.inRange(hsv, lower_green, upper_green)
+
+        if np.sum(green_mask > 0) > 30:
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            dilated_mask = cv2.dilate(green_mask, kernel, iterations=2)
+            image_rgb = cv2.inpaint(image_rgb, dilated_mask, inpaintRadius=5, flags=cv2.INPAINT_TELEA)
+
+        return image_rgb
+
+    def preprocess_patch(self, image_rgb: np.ndarray, apply_clahe: bool = True, filter_vegetation: bool = True) -> np.ndarray:
         """
         Standardized end-to-end single patch preprocessing pipeline.
-        Denoise -> CLAHE -> Resize -> Return standardized RGB.
+        Vegetation Suppression -> Denoise -> CLAHE -> Resize -> Return standardized RGB.
         """
+        if filter_vegetation:
+            image_rgb = self.remove_vegetation_debris(image_rgb)
+
         denoised = self.denoise_image(image_rgb, method="bilateral")
         if apply_clahe:
             enhanced = self.enhance_contrast_clahe(denoised)
