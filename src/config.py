@@ -75,8 +75,8 @@ UAV_CONFIG = {
 TRAIN_CONFIG = {
     "img_size": (224, 224),
     "batch_size": 32,
-    "epochs": 12,
-    "learning_rate": 2e-4,
+    "epochs": 15,
+    "learning_rate": 2.5e-4,
     "weight_decay": 1e-4,
     "train_split": 0.70,
     "val_split": 0.15,

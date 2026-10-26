@@ -11,6 +11,13 @@ Execution time: ~5 seconds.
 
 import sys
 from pathlib import Path
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 import cv2
 import torch
 import numpy as np

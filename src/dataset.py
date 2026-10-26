@@ -113,12 +113,16 @@ class SoilDataManager:
             soil_idx = SOIL_TYPE_TO_IDX[soil_name]
 
             all_files = [f for f in type_dir.glob("*.*") if f.suffix.lower() in [".jpg", ".jpeg", ".png"]]
-            np.random.shuffle(all_files)
+            orig_files = [f for f in all_files if f.name.startswith("orig_")]
+            cyaug_files = [f for f in all_files if not f.name.startswith("orig_")]
+            np.random.shuffle(orig_files)
+            np.random.shuffle(cyaug_files)
+            combined_files = orig_files + cyaug_files
 
-            if max_per_class is not None and len(all_files) > max_per_class:
-                selected_files = all_files[:max_per_class]
+            if max_per_class is not None and len(combined_files) > max_per_class:
+                selected_files = combined_files[:max_per_class]
             else:
-                selected_files = all_files
+                selected_files = combined_files
 
             for img_file in selected_files:
                 # Read image to compute physical soil health proxy
