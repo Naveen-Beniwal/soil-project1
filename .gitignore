@@ -20,3 +20,6 @@ env/
 # Temporary scratch tests
 outputs/explainability/test_*
 outputs/explainability/debug_*
+
+# MS Office lock files
+~$*
